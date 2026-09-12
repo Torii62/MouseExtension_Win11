@@ -19,7 +19,7 @@ ME_CreateProductInfo() {
     ; 製品固有値は将来の改名・版更新に備えてここだけに集約する。
     product := {}
     product.Name := "MouseExtension_Win11"
-    product.Version := "1.1.0"
+    product.Version := "1.1.1"
     product.AhkFileName := "MouseExtension_Win11.ahk"
     product.IniFileName := "MouseExtension_Win11.ini"
 

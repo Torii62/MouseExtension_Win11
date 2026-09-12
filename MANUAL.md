@@ -1,10 +1,10 @@
-# MouseExtension_Win11 v1.1.0 Manual
+# MouseExtension_Win11 v1.1.1 Manual
 
 ## 1. はじめに
 
 MouseExtension_Win11 は、Windows 11 上のマウス操作を拡張する MouseGestureL.ahk 1.41 用プラグインです。タイトルバー、タブ、エクスプローラー、タスクバー、通知領域、スクロールバーなど、カーソル位置に応じた操作を追加します。
 
-本マニュアルは v1.1.0 の正式なユーザーマニュアルです。記載内容は、v1.1.0 版 `MouseExtension_Win11.ahk` の設定スキーマと実装、および明示された Windows 11 実機確認結果に基づきます。
+本マニュアルは v1.1.1 の正式なユーザーマニュアルです。記載内容は、v1.1.1 版 `MouseExtension_Win11.ahk` の設定スキーマと実装、および明示された Windows 11 実機確認結果に基づきます。
 
 ## 2. このマニュアルの使い方
 
@@ -56,7 +56,7 @@ MouseGestureL の設置方法は環境ごとに異なるため、本マニュア
 
 ## 5. MouseExtensionNative.dll
 
-`MouseExtensionNative.dll` は v1.1.0 の配布必須ファイルです。`MouseExtension_Win11.ahk` と同じフォルダーに置いてください。
+`MouseExtensionNative.dll` は v1.1.1 の配布必須ファイルです。`MouseExtension_Win11.ahk` と同じフォルダーに置いてください。
 
 起動時に DLL を読み込み、少なくとも次の export を利用します。
 
@@ -156,7 +156,7 @@ Horizontal=-1
 ; Rule1=SomeWindowClass|Options
 ```
 
-`BrowserDragScroll` は現行スキーマに含まれます。`LongPressDoubleClick` は v1.1.0 の INI スキーマにはありません。
+`BrowserDragScroll` は現行スキーマに含まれます。`LongPressDoubleClick` は v1.1.1 の INI スキーマにはありません。
 
 ## 7. 機能別マニュアル
 
@@ -199,6 +199,8 @@ Horizontal=-1
 - WheelUp: `Ctrl+Shift+Tab` を送信して前のタブへ移動
 - WheelDown: `Ctrl+Tab` を送信して次のタブへ移動
 - 全体スイッチ: `[EnableFunction] TabSwitch=1`（既定 ON）
+
+物理的に左ボタンを押している間は、ドラッグ中のホイール操作との競合を避けるため TabSwitch を行いません。
 
 標準アダプターは Firefox、Chrome、Edge、Windows 11 のメモ帳、エクスプローラー、`SysTabControl32` です。各 `[TabSwitch]` key で個別に ON/OFF できます。key が ON でも、そのアプリの全バージョンや全 UI を保証するものではありません。カーソル直下が実装の厳密なタブ条件を満たす場合だけ処理します。
 
@@ -669,11 +671,11 @@ ExcludeExe=firefox.exe
 
 ## 13. 今後の候補
 
-`LongPressDoubleClick` は v1.1.0 では未実装で、今後の候補です。
+`LongPressDoubleClick` は v1.1.1 では未実装で、今後の候補です。
 
 - LongPressDoubleClick
 
-廃止されたという意味ではありませんが、将来の実装を保証するものでもありません。v1.1.0 の INI スキーマには placeholder がありません。古い INI に関連 key や section が残っていても、v1.1.0 では使用せず、自動削除もしません。
+廃止されたという意味ではありませんが、将来の実装を保証するものでもありません。v1.1.1 の INI スキーマには placeholder がありません。古い INI に関連 key や section が残っていても、v1.1.1 では使用せず、自動削除もしません。
 
 ## ライセンス
 
