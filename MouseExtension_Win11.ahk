@@ -5030,6 +5030,8 @@ ME_SpecialScrollbarScroll_PrepareTarget() {
     global ME_State
     state := ME_State.SpecialScrollbarScroll
     state.Candidate := false
+    if (GetKeyState("LButton", "P"))
+        return false
     try {
         if (!ME_SpecialScrollbarScroll_CanOperate()
             || !ME_GetCursorScreenPoint(screenX, screenY))

@@ -360,6 +360,8 @@ TrayWheelVolume または TrayMiddleClickMute の操作に成功したとき、�
 - 縦スクロールバー: `[SpecialScrollbarScroll] Vertical=-1`
 - 横スクロールバー: `[SpecialScrollbarScroll] Horizontal=-1`
 
+物理的に左ボタンを押している間は、ドラッグ中のホイール操作との競合を避けるため SpecialScrollbarScroll を行いません。
+
 したがって既定では、縦・横スクロールバーとも page increment／decrement を行います。
 
 Vertical と Horizontal の値:
