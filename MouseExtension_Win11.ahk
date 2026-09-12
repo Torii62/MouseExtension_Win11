@@ -2847,6 +2847,10 @@ ME_InitializeTabSwitch() {
 ME_TabSwitch_PrepareTarget() {
     global ME_Config, ME_State
     ME_State.TabSwitch.Candidate := false
+
+    if (GetKeyState("LButton", "P"))
+        return false
+
     if (ME_Config.TabIgnore.MaxIndex()) {
         if (ME_TabSwitch_ShouldIgnoreCurrentTarget())
             return false
