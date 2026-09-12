@@ -59,6 +59,7 @@ MouseExtension_Win11 は、Windows 11 のマウス操作を拡張する MouseGes
 - **TrayMiddleClickMute** — 通知領域の中クリックでマスターミュートを切り替えます。
 - **Volume Overlay** — 音量またはミュート状態を画面上に表示します。
 - **SpecialScrollbarScroll** — 対応スクロールバー上のホイールを line／page／edge 動作へ変換します。初期状態は ON で、縦・横とも1ページ単位です。
+- **BrowserDragScroll** — Firefox／Chrome／Edge の対応するお気に入り・ブックマークサイドバーと Windows 11 エクスプローラー右ペインで、LButton drag 中に縦ホイールでスクロールします。対象ごとに ON/OFF できます。
 - **AccelScroll** — 通常の縦ホイールを残したまま、速度に応じた追加スクロールを送ります。初期状態は OFF です。
 
 ## 基本的な設定方法

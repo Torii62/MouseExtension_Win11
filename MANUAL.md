@@ -1,10 +1,10 @@
-# MouseExtension_Win11 v1.0.0 Manual
+# MouseExtension_Win11 v1.1.0 Manual
 
 ## 1. はじめに
 
 MouseExtension_Win11 は、Windows 11 上のマウス操作を拡張する MouseGestureL.ahk 1.41 用プラグインです。タイトルバー、タブ、エクスプローラー、タスクバー、通知領域、スクロールバーなど、カーソル位置に応じた操作を追加します。
 
-本マニュアルは v1.0.0 の正式なユーザーマニュアルです。記載内容は、v1.0.0 版 `MouseExtension_Win11.ahk` の設定スキーマと実装、および明示された Windows 11 実機確認結果に基づきます。
+本マニュアルは v1.1.0 の正式なユーザーマニュアルです。記載内容は、v1.1.0 版 `MouseExtension_Win11.ahk` の設定スキーマと実装、および明示された Windows 11 実機確認結果に基づきます。
 
 ## 2. このマニュアルの使い方
 
@@ -56,7 +56,7 @@ MouseGestureL の設置方法は環境ごとに異なるため、本マニュア
 
 ## 5. MouseExtensionNative.dll
 
-`MouseExtensionNative.dll` は v1.0.0 の配布必須ファイルです。`MouseExtension_Win11.ahk` と同じフォルダーに置いてください。
+`MouseExtensionNative.dll` は v1.1.0 の配布必須ファイルです。`MouseExtension_Win11.ahk` と同じフォルダーに置いてください。
 
 起動時に DLL を読み込み、少なくとも次の export を利用します。
 
@@ -97,6 +97,7 @@ ExplorerViewMode=1
 Taskbar=1
 AccelScroll=0
 SpecialScrollbarScroll=1
+BrowserDragScroll=1
 
 [General]
 Debug=0
@@ -112,6 +113,12 @@ Edge=1
 Notepad=1
 Explorer=1
 SysTabControl32=1
+
+[BrowserDragScroll]
+Firefox=1
+Chrome=1
+Edge=1
+Explorer=1
 
 [AccelScroll]
 MinThrottle=2
@@ -149,7 +156,7 @@ Horizontal=-1
 ; Rule1=SomeWindowClass|Options
 ```
 
-`BrowserDragScroll` と `LongPressDoubleClick` は現行 v1.0.0 の INI スキーマにはありません。
+`BrowserDragScroll` は現行スキーマに含まれます。`LongPressDoubleClick` は v1.1.0 の INI スキーマにはありません。
 
 ## 7. 機能別マニュアル
 
@@ -366,7 +373,7 @@ Vertical と Horizontal の値:
 
 今回の Windows 11 実機環境での動作確認済み例は、エクスプローラー、メモ帳、システム情報（`msinfo32`）、7-Zip File Manager です。これは各アプリの全画面、全バージョン、全スクロールバーを保証するものではありません。
 
-Firefox、Chrome、Edge のページ右端スクロールバーは、v1.0.0 の厳密な semantic hit-test 条件を満たさないため未対応です。カスタム描画スクロールバーも保証しません。厳密な XAML/UIA Horizontal は、十分に自然な実機対象がなく未実測です。
+Firefox、Chrome、Edge のページ右端スクロールバーは、現行実装の厳密な semantic hit-test 条件を満たさないため未対応です。カスタム描画スクロールバーも保証しません。厳密な XAML/UIA Horizontal は、十分に自然な実機対象がなく未実測です。
 
 設定例:
 
@@ -379,7 +386,32 @@ Vertical=-1
 Horizontal=-1
 ```
 
-### 7.13 AccelScroll
+### 7.13 BrowserDragScroll
+
+Firefox／Chrome／Edge の対応するお気に入り・ブックマークサイドバーと、Windows 11 エクスプローラー右ペインで、LButton drag 中の WheelDown／WheelUpにより縦スクロールします。ブラウザーではサイドバー項目の並べ替え中、エクスプローラーでは右ペインの selection rectangle drag または実ファイルdrag中が対象です。
+
+- 全体スイッチ: `[EnableFunction] BrowserDragScroll=1`（既定 ON）
+- Firefox: `[BrowserDragScroll] Firefox=1`（既定 ON）
+- Chrome: `[BrowserDragScroll] Chrome=1`（既定 ON）
+- Edge: `[BrowserDragScroll] Edge=1`（既定 ON）
+- Windows 11 エクスプローラー右ペイン: `[BrowserDragScroll] Explorer=1`（既定 ON）
+
+全体スイッチと対象ごとのスイッチがともに ON で、対象条件を厳密に満たす場合だけホイール入力を処理します。対象外のUIや判定不能な状態ではホイールを奪いません。ブラウザーやエクスプローラーのすべてのdrag操作、すべてのUIを対象にする機能ではありません。
+
+設定例:
+
+```ini
+[EnableFunction]
+BrowserDragScroll=1
+
+[BrowserDragScroll]
+Firefox=1
+Chrome=1
+Edge=1
+Explorer=1
+```
+
+### 7.14 AccelScroll
 
 通常の縦 WheelUp／WheelDown をそのまま通し、ホイール速度に応じて `SendInput` による追加ホイールだけを送る加速機能です。
 
@@ -417,7 +449,7 @@ ExcludeExe=firefox.exe,notepad.exe
 
 管理者権限で動く対象では、Windows の UIPI により synthetic 追加分が届かない場合があります。その場合でも native physical wheel は pass-through されます。
 
-### 7.14 Wheel処理の優先順位
+### 7.15 Wheel処理の優先順位
 
 専用 Wheel 機能の判定順は次のとおりです。最初に処理した1機能だけで終了します。
 
@@ -426,6 +458,7 @@ ExcludeExe=firefox.exe,notepad.exe
 3. TabSwitch
 4. ExplorerViewMode
 5. SpecialScrollbarScroll
+6. BrowserDragScroll
 
 どの専用機能も対象にしなかった通常ホイールは MouseGestureL／OS 側へ通します。専用機能が捕捉したホイールは AccelScroll の状態をリセットします。専用処理が最後まで成立しなかった場合の replay は synthetic 入力として管理され、AccelScroll の対象にはなりません。
 
@@ -447,6 +480,7 @@ AccelScroll はこの blocking router には属さず、通常の物理ホイー
 | `EnableFunction` | `Taskbar` | `1` | `0`, `1` | Taskbar／Tray 系の親スイッチ。不正時 `1`。 |
 | `EnableFunction` | `AccelScroll` | `0` | `0`, `1` | 機能全体。不正時 `0`。 |
 | `EnableFunction` | `SpecialScrollbarScroll` | `1` | `0`, `1` | 機能全体。不正時 `1`。 |
+| `EnableFunction` | `BrowserDragScroll` | `1` | `0`, `1` | 機能全体。不正時 `1`。 |
 | `General` | `Debug` | `0` | `0`, `1` | `OutputDebug` への診断出力。不正時 `0`。 |
 | `AlwaysOnTop` | `FrameColor` | `0078D4` | 6桁 hex | 固定中の枠色。不正時 `0078D4`。 |
 | `AlwaysOnTop` | `FrameThickness` | `3` | 整数 1～10 | 枠の太さ。不正時 `3`。 |
@@ -456,11 +490,15 @@ AccelScroll はこの blocking router には属さず、通常の物理ホイー
 | `TabSwitch` | `Notepad` | `1` | `0`, `1` | Windows 11 メモ帳 adapter。不正時 `1`。 |
 | `TabSwitch` | `Explorer` | `1` | `0`, `1` | Windows 11 エクスプローラー adapter。不正時 `1`。 |
 | `TabSwitch` | `SysTabControl32` | `1` | `0`, `1` | classic tab adapter。不正時 `1`。 |
+| `BrowserDragScroll` | `Firefox` | `1` | `0`, `1` | Firefox ブックマークサイドバー。不正時 `1`。 |
+| `BrowserDragScroll` | `Chrome` | `1` | `0`, `1` | Chrome お気に入り／ブックマークサイドバー。不正時 `1`。 |
+| `BrowserDragScroll` | `Edge` | `1` | `0`, `1` | Edge お気に入りサイドバー。不正時 `1`。 |
+| `BrowserDragScroll` | `Explorer` | `1` | `0`, `1` | Windows 11 エクスプローラー右ペイン。不正時 `1`。 |
 | `AccelScroll` | `MinThrottle` | `2` | 整数 1～16、`MinThrottle <= MaxThrottle` | throttle pair。不正 pair は `2 / 10`。 |
 | `AccelScroll` | `MaxThrottle` | `10` | 整数 1～16、`MinThrottle <= MaxThrottle` | throttle pair。不正 pair は `2 / 10`。 |
 | `AccelScroll` | `MinWheelSpeed` | `8` | 整数 1～100、`MinWheelSpeed < MaxWheelSpeed` | speed pair。不正 pair は `8 / 25`。 |
 | `AccelScroll` | `MaxWheelSpeed` | `25` | 整数 1～100、`MinWheelSpeed < MaxWheelSpeed` | speed pair。不正 pair は `8 / 25`。 |
-| `AccelScroll` | `ExcludeExe` | 空 | カンマ区切りの `.exe` basename | 無効 entry だけ無視。詳細は 7.13。 |
+| `AccelScroll` | `ExcludeExe` | 空 | カンマ区切りの `.exe` basename | 無効 entry だけ無視。詳細は 7.14。 |
 | `Taskbar` | `StartWheel` | `1` | `0`, `1` | スタートボタン上のホイール。不正時 `1`。 |
 | `Taskbar` | `TaskButtonWheel` | `1` | `0`, `1` | タスクバーボタン上のホイール。不正時 `1`。 |
 | `Taskbar` | `TaskButtonWheelMultiWindow` | `1` | `0`, `1` | 複数ウィンドウ処理。不正時 `1`。 |
@@ -500,7 +538,9 @@ SpecialScrollbarScroll の対象スクロールバーとして、次のアプリ
 
 これは各アプリ全体、全画面、全バージョンでの動作保証ではありません。
 
-### 9.2 v1.0.0で未対応と確認済み
+BrowserDragScroll は、Firefox／Chrome／Edge の対応するお気に入り・ブックマークサイドバーでの項目dragと、Windows 11 エクスプローラー右ペインでの selection rectangle drag／実ファイルdragについて、WheelDown／WheelUp、drag状態維持、対象別ON/OFFが確認されています。
+
+### 9.2 SpecialScrollbarScrollで未対応と確認済み
 
 SpecialScrollbarScroll は次のページ右端スクロールバーに対応していません。
 
@@ -522,13 +562,14 @@ SpecialScrollbarScroll は次のページ右端スクロールバーに対応し
 - Windows 11 を対象とします。
 - MouseGestureL.ahk 1.41 を対象とします。
 - AutoHotkey v1.1.37.02 Unicode 64-bit を対象とします。AHK v2 は非対応です。
-- Firefox、Chrome、Edge のページ右端スクロールバーは SpecialScrollbarScroll v1.0.0 未対応です。
+- Firefox、Chrome、Edge のページ右端スクロールバーは SpecialScrollbarScroll では未対応です。
 - カスタム描画スクロールバーは保証しません。
 - strict XAML/UIA Horizontal は未実測です。
 - StartWheel の復元時 Z-order は Windows 標準動作に依存します。
 - elevated application では、権限差により AccelScroll の synthetic extra が届かない場合があります。native physical wheel は残ります。
 - Native Helper を利用できない場合、必要とする TaskButton 系の対象解決が fail closed することがあります。
 - 各機能は誤操作を避けるため対象を厳密に再確認します。判定が曖昧な場合は何もしないことがあります。
+- drag中に極端に高速な連続ホイール入力を行うと、一時的に応答が遅くなる場合があります。
 
 ## 11. トラブルシューティング
 
@@ -569,7 +610,7 @@ Windows の権限分離により `SendInput` の synthetic extra が届かない
 
 ### ブラウザーの右端スクロールバーでSpecialScrollbarScrollが効かない
 
-Firefox、Chrome、Edge のページ右端スクロールバーは v1.0.0 未対応です。設定ミスではありません。通常のホイール操作を使ってください。
+Firefox、Chrome、Edge のページ右端スクロールバーは SpecialScrollbarScroll では未対応です。設定ミスではありません。通常のホイール操作を使ってください。
 
 ### 不正なINI値を設定した
 
@@ -608,7 +649,7 @@ ExcludeExe=firefox.exe
 
 ### Q. Chromeの右端scrollbarでも使えますか？
 
-いいえ。Chrome のページ右端スクロールバーは v1.0.0 未対応です。Firefox と Edge も同様です。
+いいえ。Chrome のページ右端スクロールバーは SpecialScrollbarScroll では未対応です。Firefox と Edge も同様です。
 
 ### Q. AHK v2で使えますか？
 
@@ -626,14 +667,13 @@ ExcludeExe=firefox.exe
 
 必ずしも停止しません。Native Helper が利用不能になり、それを必要とする TaskButton 系の対象解決が安全側で中止される場合があります。
 
-## 13. v1.1以降の候補
+## 13. 今後の候補
 
-次の2機能は v1.0.0 では未実装で、v1.1 以降の候補です。
+`LongPressDoubleClick` は v1.1.0 では未実装で、今後の候補です。
 
-- BrowserDragScroll
 - LongPressDoubleClick
 
-廃止されたという意味ではありませんが、将来の実装を保証するものでもありません。v1.0.0 の INI スキーマには placeholder がありません。古い INI に関連 key や section が残っていても、v1.0.0 では使用せず、自動削除もしません。
+廃止されたという意味ではありませんが、将来の実装を保証するものでもありません。v1.1.0 の INI スキーマには placeholder がありません。古い INI に関連 key や section が残っていても、v1.1.0 では使用せず、自動削除もしません。
 
 ## ライセンス
 

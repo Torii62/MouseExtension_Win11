@@ -19,7 +19,7 @@ ME_CreateProductInfo() {
     ; 製品固有値は将来の改名・版更新に備えてここだけに集約する。
     product := {}
     product.Name := "MouseExtension_Win11"
-    product.Version := "1.0.0"
+    product.Version := "1.1.0"
     product.AhkFileName := "MouseExtension_Win11.ahk"
     product.IniFileName := "MouseExtension_Win11.ini"
 
@@ -59,6 +59,7 @@ ME_Initialize() {
     ME_InitializeTabSwitch()
     ME_InitializeExplorerViewMode()
     ME_InitializeSpecialScrollbarScroll()
+    ME_InitializeBrowserDragScroll()
     ME_InitializeAccelScroll()
     ME_Debug("Initialization completed.")
     return iniReady
@@ -81,6 +82,7 @@ ME_CreateDefaults() {
     ME_AddDefaultKey(defaults, "EnableFunction", "Taskbar", "1")
     ME_AddDefaultKey(defaults, "EnableFunction", "AccelScroll", "0")
     ME_AddDefaultKey(defaults, "EnableFunction", "SpecialScrollbarScroll", "1")
+    ME_AddDefaultKey(defaults, "EnableFunction", "BrowserDragScroll", "1")
 
     ME_AddDefaultSection(defaults, "General")
     ME_AddDefaultKey(defaults, "General", "Debug", "0")
@@ -96,6 +98,12 @@ ME_CreateDefaults() {
     ME_AddDefaultKey(defaults, "TabSwitch", "Notepad", "1")
     ME_AddDefaultKey(defaults, "TabSwitch", "Explorer", "1")
     ME_AddDefaultKey(defaults, "TabSwitch", "SysTabControl32", "1")
+
+    ME_AddDefaultSection(defaults, "BrowserDragScroll")
+    ME_AddDefaultKey(defaults, "BrowserDragScroll", "Firefox", "1")
+    ME_AddDefaultKey(defaults, "BrowserDragScroll", "Chrome", "1")
+    ME_AddDefaultKey(defaults, "BrowserDragScroll", "Edge", "1")
+    ME_AddDefaultKey(defaults, "BrowserDragScroll", "Explorer", "1")
 
     ME_AddDefaultSection(defaults, "AccelScroll")
     ME_AddDefaultKey(defaults, "AccelScroll", "MinThrottle", "2")
@@ -205,8 +213,13 @@ ME_CompleteMissingIniEntries(iniPath, defaults) {
         return false
 
     succeeded := true
+    missingDefaultSections := []
     for _, section in defaults.Sections {
         sectionId := ME_Lower(section.Name)
+        if (!inventory.Sections.HasKey(sectionId)) {
+            missingDefaultSections.Push(section)
+            continue
+        }
         for _, key in section.Keys {
             keyId := sectionId . Chr(30) . ME_Lower(key.Name)
             if (!inventory.Keys.HasKey(keyId)) {
@@ -216,6 +229,9 @@ ME_CompleteMissingIniEntries(iniPath, defaults) {
             }
         }
     }
+    if (missingDefaultSections.MaxIndex()
+        && !ME_AppendMissingDefaultSections(iniPath, missingDefaultSections))
+        succeeded := false
 
     missingRuleSections := []
     for _, sectionName in defaults.RuleSections {
@@ -254,6 +270,42 @@ ME_ReadIniInventory(iniPath) {
             inventory.Keys[currentSection . Chr(30) . keyName] := true
     }
     return inventory
+}
+
+ME_AppendMissingDefaultSections(iniPath, sections) {
+    reader := FileOpen(iniPath, "r")
+    if (!IsObject(reader))
+        return false
+    iniEncoding := reader.Encoding
+    iniText := reader.Read()
+    reader.Close()
+
+    lineEndingView := StrReplace(iniText, "`r`n", "`n")
+    lineEndingView := StrReplace(lineEndingView, "`r", "`n")
+    if (lineEndingView = "")
+        separator := ""
+    else if (RegExMatch(lineEndingView, "\n[ \t]*\n$"))
+        separator := ""
+    else if (SubStr(lineEndingView, 0) == "`n")
+        separator := "`r`n"
+    else
+        separator := "`r`n`r`n"
+
+    text := separator
+    for index, section in sections {
+        if (index > 1)
+            text .= "`r`n"
+        text .= "[" . section.Name . "]`r`n"
+        for _, key in section.Keys
+            text .= key.Name . "=" . key.Value . "`r`n"
+    }
+
+    file := FileOpen(iniPath, "a", iniEncoding)
+    if (!IsObject(file))
+        return false
+    written := file.Write(text)
+    file.Close()
+    return (written >= StrLen(text))
 }
 
 ME_AppendMissingRuleSections(iniPath, sectionNames) {
@@ -295,7 +347,7 @@ ME_LoadConfig(iniPath, defaults) {
     config.EnableFunction := {}
     for _, keyName in ["AlwaysOnTop", "OpenExeFolder", "MoveDisabledWindow"
         , "TabSwitch", "ExplorerViewMode", "Taskbar", "AccelScroll"
-        , "SpecialScrollbarScroll"]
+        , "SpecialScrollbarScroll", "BrowserDragScroll"]
         config.EnableFunction[keyName] := ME_ReadOnOff(iniPath, defaults, "EnableFunction", keyName)
 
     config.General := {}
@@ -308,6 +360,11 @@ ME_LoadConfig(iniPath, defaults) {
     config.TabSwitch := {}
     for _, keyName in ["Firefox", "Chrome", "Edge", "Notepad", "Explorer", "SysTabControl32"]
         config.TabSwitch[keyName] := ME_ReadOnOff(iniPath, defaults, "TabSwitch", keyName)
+
+    config.BrowserDragScroll := {}
+    for _, keyName in ["Firefox", "Chrome", "Edge", "Explorer"]
+        config.BrowserDragScroll[keyName] := ME_ReadOnOff(iniPath, defaults
+            , "BrowserDragScroll", keyName)
 
     config.AccelScroll := {}
     throttlePair := ME_ReadAccelScrollPair(iniPath, defaults, "MinThrottle"
@@ -575,6 +632,8 @@ ME_CreateRuntimeState() {
     state.SpecialScrollbarScroll := {Initialized: false, CleanupStarted: false
         , Candidate: false, CandidateLifetimeMs: 100
         , ScrollBarMaxDepth: 3, ContainerMaxDepth: 6}
+    state.BrowserDragScroll := {Initialized: false, CleanupStarted: false
+        , Candidate: false, CandidateLifetimeMs: 100}
     state.AccelScroll := {Initialized: false, CleanupStarted: false
         , LastDir: "", LastTick: 0, PrevSpeed: 0, Sending: false
         , CriterionCallback: false, ModifierCriterionCallback: false
@@ -5183,6 +5242,378 @@ ME_SpecialScrollbarScroll_Cleanup() {
 }
 
 ; -----------------------------------------------------------------------------
+; BrowserDragScroll (v1.1.0: browser sidebar / Explorer right-pane drag + vertical wheel)
+; -----------------------------------------------------------------------------
+
+ME_InitializeBrowserDragScroll() {
+    global ME_Config, ME_State
+    state := ME_State.BrowserDragScroll
+    if (state.Initialized)
+        return true
+    if (state.CleanupStarted || ME_State.CleanupStarted)
+        return false
+
+    state.Initialized := true
+    state.Candidate := false
+    if (!ME_Config.EnableFunction.BrowserDragScroll || ME_MouseGestureL_IsEditMode())
+        return true
+    if (!ME_InitializeWheelInput()) {
+        state.Initialized := false
+        return false
+    }
+    return true
+}
+
+ME_BrowserDragScroll_CanOperate() {
+    global ME_Config, ME_State
+    state := ME_State.BrowserDragScroll
+    return (state.Initialized && !state.CleanupStarted && !ME_State.CleanupStarted
+        && ME_Config.EnableFunction.BrowserDragScroll && ME_CanRouteMouseInput()
+        && ME_State.SyntheticInputDepth = 0 && !ME_MouseGestureL_IsEditMode()) ? true : false
+}
+
+ME_BrowserDragScroll_IsPhysicalKeyDown(virtualKey) {
+    keyState := DllCall("User32\GetAsyncKeyState", "Int", virtualKey, "Short")
+    return ((keyState & 0x8000) != 0) ? true : false
+}
+
+ME_BrowserDragScroll_HasExactButtonState() {
+    if (!ME_BrowserDragScroll_IsPhysicalKeyDown(0x01)) ; VK_LBUTTON
+        return false
+    ; RButton/MButton/XButton1/XButton2 and Shift/Ctrl/Alt/LWin/RWin.
+    for _, virtualKey in [0x02, 0x04, 0x05, 0x06, 0x10, 0x11, 0x12, 0x5B, 0x5C]
+        if (ME_BrowserDragScroll_IsPhysicalKeyDown(virtualKey))
+            return false
+    return true
+}
+
+ME_BrowserDragScroll_GetGuiWindows(threadId, ByRef activeHwnd
+    , ByRef focusHwnd, ByRef captureHwnd) {
+    activeHwnd := 0
+    focusHwnd := 0
+    captureHwnd := 0
+    if (!threadId)
+        return false
+
+    guiInfoSize := 8 + (6 * A_PtrSize) + 16
+    VarSetCapacity(guiInfo, guiInfoSize, 0)
+    NumPut(guiInfoSize, guiInfo, 0, "UInt")
+    if (!DllCall("User32\GetGUIThreadInfo", "UInt", threadId
+        , "Ptr", &guiInfo, "Int"))
+        return false
+
+    activeHwnd := NumGet(guiInfo, 8 + (0 * A_PtrSize), "Ptr")
+    focusHwnd := NumGet(guiInfo, 8 + (1 * A_PtrSize), "Ptr")
+    captureHwnd := NumGet(guiInfo, 8 + (2 * A_PtrSize), "Ptr")
+    return true
+}
+
+ME_BrowserDragScroll_GetProcessName(processId, ByRef processName) {
+    processName := ""
+    if (!processId)
+        return false
+
+    processHandle := DllCall("Kernel32\OpenProcess", "UInt", 0x1000
+        , "Int", false, "UInt", processId, "Ptr") ; PROCESS_QUERY_LIMITED_INFORMATION
+    if (!processHandle)
+        return false
+
+    characterCapacity := 32768
+    VarSetCapacity(pathBuffer, characterCapacity * 2, 0)
+    characterCount := characterCapacity
+    querySucceeded := DllCall("Kernel32\QueryFullProcessImageNameW"
+        , "Ptr", processHandle, "UInt", 0, "Ptr", &pathBuffer
+        , "UIntP", characterCount, "Int")
+    DllCall("Kernel32\CloseHandle", "Ptr", processHandle, "Int")
+    if (!querySucceeded || characterCount <= 0 || characterCount >= characterCapacity)
+        return false
+
+    imagePath := StrGet(&pathBuffer, characterCount, "UTF-16")
+    if (imagePath = "")
+        return false
+    SplitPath, imagePath, processName
+    return (processName != "") ? true : false
+}
+
+ME_BrowserDragScroll_IsTargetEnabled(processName) {
+    global ME_Config
+    if (processName == "firefox.exe")
+        return ME_Config.BrowserDragScroll.Firefox ? true : false
+    if (processName == "chrome.exe")
+        return ME_Config.BrowserDragScroll.Chrome ? true : false
+    if (processName == "msedge.exe")
+        return ME_Config.BrowserDragScroll.Edge ? true : false
+    if (processName == "explorer.exe")
+        return ME_Config.BrowserDragScroll.Explorer ? true : false
+    return false
+}
+
+ME_BrowserDragScroll_GetExplorerEligibleSnapshot(foregroundHwnd
+    , foregroundProcessId, foregroundThreadId, foregroundClass
+    , foregroundProcess) {
+    if (!(foregroundProcess == "explorer.exe")
+        || !(foregroundClass == "CabinetWClass")
+        || !ME_BrowserDragScroll_GetGuiWindows(foregroundThreadId
+            , activeHwnd, focusHwnd, captureHwnd)
+        || !focusHwnd)
+        return false
+
+    if (!ME_AlwaysOnTop_GetWindowIdentity(focusHwnd
+            , focusProcessId, focusThreadId, focusClass)
+        || foregroundProcessId != focusProcessId
+        || !(focusClass == "DirectUIHWND"))
+        return false
+
+    rootHwnd := DllCall("User32\GetAncestor", "Ptr", foregroundHwnd
+        , "UInt", 2, "Ptr") ; GA_ROOT
+    focusRootHwnd := DllCall("User32\GetAncestor", "Ptr", focusHwnd
+        , "UInt", 2, "Ptr") ; GA_ROOT
+    parentHwnd := DllCall("User32\GetParent", "Ptr", focusHwnd, "Ptr")
+    if (!rootHwnd || rootHwnd != foregroundHwnd || focusRootHwnd != rootHwnd
+        || !ME_AlwaysOnTop_GetWindowIdentity(rootHwnd
+            , rootProcessId, rootThreadId, rootClass)
+        || rootProcessId != foregroundProcessId
+        || !(rootClass == "CabinetWClass")
+        || !ME_AlwaysOnTop_GetWindowIdentity(parentHwnd
+            , parentProcessId, parentThreadId, parentClass)
+        || parentProcessId != foregroundProcessId
+        || !(parentClass == "SHELLDLL_DefView"))
+        return false
+
+    if (!ME_GetCursorScreenPoint(screenX, screenY))
+        return false
+    pointHwnd := ME_WindowFromScreenPoint(screenX, screenY)
+    if (!pointHwnd || pointHwnd != focusHwnd
+        || !ME_AlwaysOnTop_GetWindowIdentity(pointHwnd
+            , pointProcessId, pointThreadId, pointClass)
+        || pointProcessId != foregroundProcessId
+        || !(pointClass == "DirectUIHWND")
+        || DllCall("User32\GetAncestor", "Ptr", pointHwnd
+            , "UInt", 2, "Ptr") != rootHwnd)
+        return false
+
+    captureProcessId := 0
+    captureThreadId := 0
+    captureClass := ""
+    if (captureHwnd && !ME_AlwaysOnTop_GetWindowIdentity(captureHwnd
+            , captureProcessId, captureThreadId, captureClass))
+        return false
+
+    return {BrowserProcess: foregroundProcess
+        , ForegroundHwnd: foregroundHwnd, ForegroundProcessId: foregroundProcessId
+        , ForegroundThreadId: foregroundThreadId, ForegroundClass: foregroundClass
+        , FocusHwnd: focusHwnd, FocusProcessId: focusProcessId
+        , FocusThreadId: focusThreadId, FocusClass: focusClass
+        , CaptureHwnd: captureHwnd, CaptureProcessId: captureProcessId
+        , CaptureThreadId: captureThreadId, CaptureClass: captureClass
+        , PointHwnd: pointHwnd, PointProcessId: pointProcessId
+        , PointThreadId: pointThreadId, PointClass: pointClass
+        , ScreenX: screenX, ScreenY: screenY}
+}
+
+ME_BrowserDragScroll_GetEligibleSnapshot() {
+    if (!ME_BrowserDragScroll_CanOperate()
+        || !ME_BrowserDragScroll_HasExactButtonState())
+        return false
+
+    foregroundHwnd := DllCall("User32\GetForegroundWindow", "Ptr")
+    if (!foregroundHwnd
+        || !ME_AlwaysOnTop_GetWindowIdentity(foregroundHwnd
+            , foregroundProcessId, foregroundThreadId, foregroundClass))
+        return false
+
+    if (!ME_BrowserDragScroll_GetProcessName(foregroundProcessId
+            , foregroundProcess))
+        return false
+    if (!ME_BrowserDragScroll_IsTargetEnabled(foregroundProcess))
+        return false
+    if (foregroundProcess == "explorer.exe")
+        return ME_BrowserDragScroll_GetExplorerEligibleSnapshot(foregroundHwnd
+            , foregroundProcessId, foregroundThreadId, foregroundClass
+            , foregroundProcess)
+
+    if (!ME_BrowserDragScroll_GetGuiWindows(foregroundThreadId
+            , activeHwnd, focusHwnd, captureHwnd)
+        || !focusHwnd || !captureHwnd || foregroundHwnd != focusHwnd)
+        return false
+
+    if (!ME_AlwaysOnTop_GetWindowIdentity(focusHwnd
+            , focusProcessId, focusThreadId, focusClass)
+        || !ME_AlwaysOnTop_GetWindowIdentity(captureHwnd
+            , captureProcessId, captureThreadId, captureClass)
+        || foregroundProcessId != focusProcessId
+        || foregroundProcessId != captureProcessId)
+        return false
+
+    if (!ME_BrowserDragScroll_GetProcessName(foregroundProcessId, foregroundProcess)
+        || !ME_BrowserDragScroll_GetProcessName(focusProcessId, focusProcess)
+        || !ME_BrowserDragScroll_GetProcessName(captureProcessId, captureProcess))
+        return false
+
+    if (!ME_GetCursorScreenPoint(screenX, screenY))
+        return false
+    pointHwnd := ME_WindowFromScreenPoint(screenX, screenY)
+    if (!pointHwnd
+        || !ME_AlwaysOnTop_GetWindowIdentity(pointHwnd
+            , pointProcessId, pointThreadId, pointClass)
+        || pointProcessId != foregroundProcessId
+        || !ME_BrowserDragScroll_GetProcessName(pointProcessId, pointProcess))
+        return false
+
+    if (!(foregroundProcess == focusProcess)
+        || !(foregroundProcess == captureProcess)
+        || !(foregroundProcess == pointProcess))
+        return false
+
+    if (foregroundProcess == "chrome.exe" || foregroundProcess == "msedge.exe") {
+        if (!(foregroundClass == "Chrome_WidgetWin_1")
+            || !(focusClass == "Chrome_WidgetWin_1")
+            || !(captureClass == "CLIPBRDWNDCLASS")
+            || !(pointClass == "Chrome_RenderWidgetHostHWND"))
+            return false
+    } else if (foregroundProcess == "firefox.exe") {
+        if (!(foregroundClass == "MozillaWindowClass")
+            || !(focusClass == "MozillaWindowClass")
+            || !(captureClass == "CLIPBRDWNDCLASS")
+            || !(pointClass == "MozillaWindowClass"))
+            return false
+    } else {
+        return false
+    }
+
+    return {BrowserProcess: foregroundProcess
+        , ForegroundHwnd: foregroundHwnd, ForegroundProcessId: foregroundProcessId
+        , ForegroundThreadId: foregroundThreadId, ForegroundClass: foregroundClass
+        , FocusHwnd: focusHwnd, FocusProcessId: focusProcessId
+        , FocusThreadId: focusThreadId, FocusClass: focusClass
+        , CaptureHwnd: captureHwnd, CaptureProcessId: captureProcessId
+        , CaptureThreadId: captureThreadId, CaptureClass: captureClass
+        , PointHwnd: pointHwnd, PointProcessId: pointProcessId
+        , PointThreadId: pointThreadId, PointClass: pointClass
+        , ScreenX: screenX, ScreenY: screenY}
+}
+
+ME_BrowserDragScroll_PrepareTarget() {
+    global ME_State
+    state := ME_State.BrowserDragScroll
+    state.Candidate := false
+    try {
+        snapshot := ME_BrowserDragScroll_GetEligibleSnapshot()
+        if (!IsObject(snapshot))
+            return false
+        snapshot.Kind := "BrowserDragScroll"
+        snapshot.Tick := A_TickCount
+        state.Candidate := snapshot
+        return true
+    } catch error {
+        state.Candidate := false
+        return false
+    }
+}
+
+ME_BrowserDragScroll_AreSnapshotsEqual(candidate, current) {
+    if (!IsObject(candidate) || !IsObject(current))
+        return false
+    return (candidate.BrowserProcess == current.BrowserProcess
+        && candidate.ForegroundHwnd = current.ForegroundHwnd
+        && candidate.ForegroundProcessId = current.ForegroundProcessId
+        && candidate.ForegroundThreadId = current.ForegroundThreadId
+        && candidate.ForegroundClass == current.ForegroundClass
+        && candidate.FocusHwnd = current.FocusHwnd
+        && candidate.FocusProcessId = current.FocusProcessId
+        && candidate.FocusThreadId = current.FocusThreadId
+        && candidate.FocusClass == current.FocusClass
+        && candidate.CaptureHwnd = current.CaptureHwnd
+        && candidate.CaptureProcessId = current.CaptureProcessId
+        && candidate.CaptureThreadId = current.CaptureThreadId
+        && candidate.CaptureClass == current.CaptureClass
+        && candidate.PointHwnd = current.PointHwnd
+        && candidate.PointProcessId = current.PointProcessId
+        && candidate.PointThreadId = current.PointThreadId
+        && candidate.PointClass == current.PointClass) ? true : false
+}
+
+ME_BrowserDragScroll_IsCandidateValid(candidate, ByRef currentSnapshot) {
+    global ME_State
+    currentSnapshot := false
+    if (!IsObject(candidate) || !(candidate.Kind == "BrowserDragScroll")
+        || !candidate.HasKey("Tick") || !ME_BrowserDragScroll_CanOperate())
+        return false
+
+    elapsed := A_TickCount - candidate.Tick
+    if (elapsed < 0)
+        elapsed += 0x100000000
+    if (elapsed > ME_State.BrowserDragScroll.CandidateLifetimeMs)
+        return false
+
+    currentSnapshot := ME_BrowserDragScroll_GetEligibleSnapshot()
+    if (!ME_BrowserDragScroll_AreSnapshotsEqual(candidate, currentSnapshot))
+        return false
+
+    elapsed := A_TickCount - candidate.Tick
+    if (elapsed < 0)
+        elapsed += 0x100000000
+    return (elapsed <= ME_State.BrowserDragScroll.CandidateLifetimeMs
+        && ME_BrowserDragScroll_CanOperate()) ? true : false
+}
+
+ME_BrowserDragScroll_RevalidateInputState(snapshot, ByRef screenX, ByRef screenY) {
+    screenX := 0
+    screenY := 0
+    if (!IsObject(snapshot) || !ME_BrowserDragScroll_CanOperate()
+        || !ME_BrowserDragScroll_HasExactButtonState()
+        || DllCall("User32\GetForegroundWindow", "Ptr") != snapshot.ForegroundHwnd
+        || !ME_BrowserDragScroll_GetGuiWindows(snapshot.ForegroundThreadId
+            , activeHwnd, focusHwnd, captureHwnd)
+        || focusHwnd != snapshot.FocusHwnd || captureHwnd != snapshot.CaptureHwnd
+        || !ME_GetCursorScreenPoint(screenX, screenY)
+        || ME_WindowFromScreenPoint(screenX, screenY) != snapshot.PointHwnd)
+        return false
+    return true
+}
+
+ME_BrowserDragScroll_HandleWheel(input) {
+    global ME_State
+    state := ME_State.BrowserDragScroll
+    ownsInput := IsObject(state.Candidate)
+    if (!ownsInput)
+        return false
+
+    try {
+        candidate := state.Candidate
+        state.Candidate := false
+        if (!IsObject(input) || !input.HasKey("Direction") || !input.HasKey("Steps")
+            || !(input.Direction == "Up" || input.Direction == "Down")
+            || IsObject(input.Steps) || !ME_IsIntegerString(input.Steps)
+            || input.Steps != 1)
+            return true
+        if (!ME_BrowserDragScroll_IsCandidateValid(candidate, currentSnapshot)
+            || !ME_BrowserDragScroll_RevalidateInputState(currentSnapshot
+                , screenX, screenY))
+            return true
+
+        wheelWParam := (input.Direction == "Up") ? 0x00780001 : 0xFF880001
+        packedCoordinates := (screenX & 0xFFFF) | ((screenY & 0xFFFF) << 16)
+        DllCall("User32\SendNotifyMessageW", "Ptr", currentSnapshot.FocusHwnd
+            , "UInt", 0x020A, "UPtr", wheelWParam, "UPtr", packedCoordinates, "Int")
+        return true
+    } catch error {
+        state.Candidate := false
+        return true
+    }
+}
+
+ME_BrowserDragScroll_Cleanup() {
+    global ME_State
+    state := ME_State.BrowserDragScroll
+    if (state.CleanupStarted)
+        return
+    state.CleanupStarted := true
+    state.Candidate := false
+    state.Initialized := false
+}
+
+; -----------------------------------------------------------------------------
 ; Taskbar (Phase 3A: StartWheel / Phase 3B: TaskButtonWheel)
 ; -----------------------------------------------------------------------------
 
@@ -7543,6 +7974,7 @@ ME_WheelInput_ShouldCapture() {
         ME_State.TabSwitch.Candidate := false
         ME_State.ExplorerViewMode.Candidate := false
         ME_State.SpecialScrollbarScroll.Candidate := false
+        ME_State.BrowserDragScroll.Candidate := false
         return false
     }
     ME_State.Taskbar.Candidate := false
@@ -7550,6 +7982,7 @@ ME_WheelInput_ShouldCapture() {
     ME_State.TabSwitch.Candidate := false
     ME_State.ExplorerViewMode.Candidate := false
     ME_State.SpecialScrollbarScroll.Candidate := false
+    ME_State.BrowserDragScroll.Candidate := false
     if (ME_Taskbar_PrepareTarget())
         return true
     if (ME_TrayWheelVolume_PrepareTarget())
@@ -7560,28 +7993,42 @@ ME_WheelInput_ShouldCapture() {
         return true
     if (ME_SpecialScrollbarScroll_PrepareTarget())
         return true
+    if (ME_BrowserDragScroll_PrepareTarget())
+        return true
     return false
 }
 
 ME_WheelInput_OnWheelUp() {
+    global ME_State
     ME_AccelScroll_Reset()
+    browserOwnsInput := IsObject(ME_State.BrowserDragScroll.Candidate)
     handled := false
     try {
         handled := ME_MouseGestureL_WheelEntry("Up", 1)
     } catch error {
         handled := false
     }
+    if (browserOwnsInput) {
+        ME_State.BrowserDragScroll.Candidate := false
+        handled := true
+    }
     if (!handled)
         ME_WheelInput_Replay("Up")
 }
 
 ME_WheelInput_OnWheelDown() {
+    global ME_State
     ME_AccelScroll_Reset()
+    browserOwnsInput := IsObject(ME_State.BrowserDragScroll.Candidate)
     handled := false
     try {
         handled := ME_MouseGestureL_WheelEntry("Down", 1)
     } catch error {
         handled := false
+    }
+    if (browserOwnsInput) {
+        ME_State.BrowserDragScroll.Candidate := false
+        handled := true
     }
     if (!handled)
         ME_WheelInput_Replay("Down")
@@ -7687,6 +8134,8 @@ ME_HandleDedicatedWheel(input) {
     if (ME_ExplorerViewMode_HandleWheel(input))
         return true
     if (ME_SpecialScrollbarScroll_HandleWheel(input))
+        return true
+    if (ME_BrowserDragScroll_HandleWheel(input))
         return true
     return false
 }
@@ -8081,6 +8530,7 @@ ME_Cleanup() {
     ME_TrayMiddleClickMute_Cleanup()
     ME_TrayWheelVolume_Cleanup()
     ME_Taskbar_Cleanup()
+    ME_BrowserDragScroll_Cleanup()
     ME_SpecialScrollbarScroll_Cleanup()
     ME_ExplorerViewMode_Cleanup()
     ME_TabSwitch_Cleanup()
